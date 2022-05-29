@@ -61,7 +61,7 @@ def get_password_hash(password):
 def authenticate_user(email: str, password: str):
     user = get_user(email)
     if not user:
-        return False
+        return {"error": "User not found"}
     if not verify_password(password, user['hashed_password']):
-        return False
+        return {"error": "Invalid password"}
     return {**user, '_id': str(user['_id'])}
