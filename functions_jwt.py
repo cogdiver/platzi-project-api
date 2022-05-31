@@ -15,6 +15,29 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 db = client.platzi
 
 
+def get_user(email: str, fields=[]):
+    return db.users.find_one({"email": email}, {f:1 for f in fields})
+
+
+def create_user(user):
+    hashed_password = get_password_hash(user['password'])
+    del user['password']
+
+    id = db.users.insert_one({
+        **user,
+        "image": f"https://www.tinygraphs.com/isogrids/{user['name']}",
+        "hashed_password": hashed_password,
+        "courses": [],
+        "routes": []
+    }).inserted_id
+
+    return write_token({
+        "_id": str(id),
+        "email": user['email'],
+        "hashed_password": hashed_password
+    })
+
+
 def expire_date(days: int):
     date = datetime.now()
     return date + timedelta(days)
@@ -34,20 +57,18 @@ def validate_token(token, output=False):
         token_ = decode(token, key=getenv("JWT"), algorithms=["HS256"])
         if output:
             return token_
+
     except exceptions.DecodeError:
         return JSONResponse(
             content={"message": "Invalid token"},
             status_code=401
         )
+
     except exceptions.ExpiredSignatureError:
         return JSONResponse(
             content={"message": "Token Expired"},
             status_code=401
         )
-
-
-def get_user(email: str):
-    return db.users.find_one({"email": email})
 
 
 def verify_password(plain_password, hashed_password):
@@ -59,9 +80,12 @@ def get_password_hash(password):
 
 
 def authenticate_user(email: str, password: str):
-    user = get_user(email)
+    user = get_user(email, fields=["email", "hashed_password"])
+
     if not user:
         return {"error": "User not found"}
+
     if not verify_password(password, user['hashed_password']):
         return {"error": "Invalid password"}
+
     return {**user, '_id': str(user['_id'])}
